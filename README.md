@@ -5,6 +5,9 @@ A command-line interface for [Paperless-ngx](https://docs.paperless-ngx.com/), t
 ## Installation
 
 ```bash
+# Homebrew (macOS/Linux)
+brew install julianfbeck/tap/paperless
+
 # From source
 go install github.com/julianfbeck/paperless-cli@latest
 
