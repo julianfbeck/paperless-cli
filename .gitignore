@@ -1,0 +1,38 @@
+# Binaries
+paperless-cli
+paperless
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output of go coverage
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# Config with secrets (use env vars instead)
+config.yaml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test artifacts
+testdata/*.pdf.uploaded
