@@ -767,3 +767,282 @@ func (c *Client) FindDocumentTypeByName(name string) (*DocumentType, error) {
 	}
 	return nil, fmt.Errorf("document type not found: %s", name)
 }
+
+// StoragePath represents a Paperless storage path
+type StoragePath struct {
+	ID            int    `json:"id"`
+	Slug          string `json:"slug"`
+	Name          string `json:"name"`
+	Path          string `json:"path"`
+	Match         string `json:"match"`
+	MatchingAlgo  int    `json:"matching_algorithm"`
+	IsInsensitive bool   `json:"is_insensitive"`
+	DocumentCount int    `json:"document_count"`
+}
+
+// SavedView represents a Paperless saved view
+type SavedView struct {
+	ID                 int    `json:"id"`
+	Name               string `json:"name"`
+	ShowOnDashboard    bool   `json:"show_on_dashboard"`
+	ShowInSidebar      bool   `json:"show_in_sidebar"`
+	SortField          string `json:"sort_field"`
+	SortReverse        bool   `json:"sort_reverse"`
+	FilterRules        []any  `json:"filter_rules"`
+}
+
+// GlobalSearchResult represents results from global search
+type GlobalSearchResult struct {
+	Documents      []Document      `json:"documents"`
+	SavedViews     []SavedView     `json:"saved_views"`
+	Correspondents []Correspondent `json:"correspondents"`
+	DocumentTypes  []DocumentType  `json:"document_types"`
+	StoragePaths   []StoragePath   `json:"storage_paths"`
+	Tags           []Tag           `json:"tags"`
+}
+
+// ListStoragePaths lists all storage paths
+func (c *Client) ListStoragePaths() (*PaginatedResponse[StoragePath], error) {
+	resp, err := c.get("/api/storage_paths/?page_size=1000")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result PaginatedResponse[StoragePath]
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// GetStoragePath gets a single storage path by ID
+func (c *Client) GetStoragePath(id int) (*StoragePath, error) {
+	resp, err := c.get(fmt.Sprintf("/api/storage_paths/%d/", id))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("storage path %d not found", id)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var sp StoragePath
+	if err := json.NewDecoder(resp.Body).Decode(&sp); err != nil {
+		return nil, err
+	}
+
+	return &sp, nil
+}
+
+// CreateStoragePath creates a new storage path
+func (c *Client) CreateStoragePath(name, path string) (*StoragePath, error) {
+	data := map[string]interface{}{
+		"name": name,
+		"path": path,
+	}
+
+	resp, err := c.post("/api/storage_paths/", data)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("create failed %d: %s", resp.StatusCode, string(body))
+	}
+
+	var sp StoragePath
+	if err := json.NewDecoder(resp.Body).Decode(&sp); err != nil {
+		return nil, err
+	}
+
+	return &sp, nil
+}
+
+// DeleteStoragePath deletes a storage path
+func (c *Client) DeleteStoragePath(id int) error {
+	resp, err := c.delete(fmt.Sprintf("/api/storage_paths/%d/", id))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("delete failed %d: %s", resp.StatusCode, string(body))
+	}
+
+	return nil
+}
+
+// ListSavedViews lists all saved views
+func (c *Client) ListSavedViews() (*PaginatedResponse[SavedView], error) {
+	resp, err := c.get("/api/saved_views/?page_size=1000")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result PaginatedResponse[SavedView]
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// GetSavedView gets a single saved view by ID
+func (c *Client) GetSavedView(id int) (*SavedView, error) {
+	resp, err := c.get(fmt.Sprintf("/api/saved_views/%d/", id))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("saved view %d not found", id)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var sv SavedView
+	if err := json.NewDecoder(resp.Body).Decode(&sv); err != nil {
+		return nil, err
+	}
+
+	return &sv, nil
+}
+
+// GlobalSearch performs a global search across all objects
+func (c *Client) GlobalSearch(query string) (*GlobalSearchResult, error) {
+	resp, err := c.get(fmt.Sprintf("/api/search/?query=%s", url.QueryEscape(query)))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result GlobalSearchResult
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// GetSimilarDocuments finds documents similar to the given one
+func (c *Client) GetSimilarDocuments(docID int, limit int) (*PaginatedResponse[Document], error) {
+	path := fmt.Sprintf("/api/documents/?more_like_id=%d", docID)
+	if limit > 0 {
+		path += fmt.Sprintf("&page_size=%d", limit)
+	}
+
+	resp, err := c.get(path)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result PaginatedResponse[Document]
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return &result, nil
+}
+
+// GetDocumentPreview gets the preview/thumbnail URL of a document
+func (c *Client) GetDocumentPreview(id int) ([]byte, error) {
+	resp, err := c.get(fmt.Sprintf("/api/documents/%d/preview/", id))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("preview failed %d: %s", resp.StatusCode, string(body))
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+// GetDocumentThumb gets the thumbnail of a document
+func (c *Client) GetDocumentThumb(id int) ([]byte, error) {
+	resp, err := c.get(fmt.Sprintf("/api/documents/%d/thumb/", id))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("thumbnail failed %d: %s", resp.StatusCode, string(body))
+	}
+
+	return io.ReadAll(resp.Body)
+}
+
+// GetStatistics gets system statistics
+func (c *Client) GetStatistics() (map[string]any, error) {
+	resp, err := c.get("/api/statistics/")
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// FindStoragePathByName finds a storage path by name
+func (c *Client) FindStoragePathByName(name string) (*StoragePath, error) {
+	paths, err := c.ListStoragePaths()
+	if err != nil {
+		return nil, err
+	}
+	for _, sp := range paths.Results {
+		if strings.EqualFold(sp.Name, name) {
+			return &sp, nil
+		}
+	}
+	return nil, fmt.Errorf("storage path not found: %s", name)
+}

@@ -116,6 +116,29 @@ Example:
 	RunE: runDocsContent,
 }
 
+var docsSimilarCmd = &cobra.Command{
+	Use:   "similar <id>",
+	Short: "Find similar documents",
+	Long: `Find documents similar to the given one.
+
+Example:
+  paperless documents similar 123
+  paperless documents similar 123 --limit 5`,
+	Args: cobra.ExactArgs(1),
+	RunE: runDocsSimilar,
+}
+
+var docsThumbCmd = &cobra.Command{
+	Use:   "thumb <id>",
+	Short: "Download document thumbnail",
+	Long: `Download the thumbnail image of a document.
+
+Example:
+  paperless documents thumb 123 -o thumb.png`,
+	Args: cobra.ExactArgs(1),
+	RunE: runDocsThumb,
+}
+
 // Flags
 var (
 	listQuery         string
@@ -143,6 +166,9 @@ var (
 	editASN              int
 
 	deleteForce bool
+
+	similarLimit int
+	thumbOutput  string
 )
 
 func init() {
@@ -155,6 +181,8 @@ func init() {
 	documentsCmd.AddCommand(docsEditCmd)
 	documentsCmd.AddCommand(docsDeleteCmd)
 	documentsCmd.AddCommand(docsContentCmd)
+	documentsCmd.AddCommand(docsSimilarCmd)
+	documentsCmd.AddCommand(docsThumbCmd)
 
 	// List flags
 	docsListCmd.Flags().StringVar(&listQuery, "query", "", "search query")
@@ -189,6 +217,12 @@ func init() {
 
 	// Delete flags
 	docsDeleteCmd.Flags().BoolVarP(&deleteForce, "force", "f", false, "skip confirmation")
+
+	// Similar flags
+	docsSimilarCmd.Flags().IntVar(&similarLimit, "limit", 10, "max results")
+
+	// Thumb flags
+	docsThumbCmd.Flags().StringVarP(&thumbOutput, "output", "o", "", "output path")
 }
 
 func runDocsList(cmd *cobra.Command, args []string) error {
@@ -614,4 +648,75 @@ func truncate(s string, max int) string {
 		return s
 	}
 	return s[:max-3] + "..."
+}
+
+func runDocsSimilar(cmd *cobra.Command, args []string) error {
+	client, err := getClient()
+	if err != nil {
+		return err
+	}
+
+	id, err := strconv.Atoi(args[0])
+	if err != nil {
+		return fmt.Errorf("invalid document ID: %s", args[0])
+	}
+
+	result, err := client.GetSimilarDocuments(id, similarLimit)
+	if err != nil {
+		return err
+	}
+
+	if isJSON() {
+		return printJSON(result)
+	}
+
+	if len(result.Results) == 0 {
+		fmt.Println("No similar documents found")
+		return nil
+	}
+
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "ID\tTITLE\tCREATED")
+	for _, doc := range result.Results {
+		fmt.Fprintf(w, "%d\t%s\t%s\n", doc.ID, truncate(doc.Title, 50), doc.CreatedDate)
+	}
+	w.Flush()
+
+	if !isQuiet() {
+		fmt.Fprintf(os.Stderr, "\nFound %d similar documents\n", len(result.Results))
+	}
+
+	return nil
+}
+
+func runDocsThumb(cmd *cobra.Command, args []string) error {
+	client, err := getClient()
+	if err != nil {
+		return err
+	}
+
+	id, err := strconv.Atoi(args[0])
+	if err != nil {
+		return fmt.Errorf("invalid document ID: %s", args[0])
+	}
+
+	data, err := client.GetDocumentThumb(id)
+	if err != nil {
+		return err
+	}
+
+	outputPath := thumbOutput
+	if outputPath == "" {
+		outputPath = fmt.Sprintf("thumb_%d.png", id)
+	}
+
+	if err := os.WriteFile(outputPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write thumbnail: %w", err)
+	}
+
+	if !isQuiet() {
+		fmt.Printf("Saved thumbnail to %s (%d bytes)\n", outputPath, len(data))
+	}
+
+	return nil
 }

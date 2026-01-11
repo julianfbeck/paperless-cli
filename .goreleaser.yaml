@@ -1,0 +1,59 @@
+version: 2
+
+builds:
+  - id: paperless
+    main: .
+    binary: paperless
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/julianfbeck/paperless-cli/cmd.version={{.Version}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+universal_binaries:
+  - id: paperless-macos
+    ids:
+      - paperless
+    name_template: paperless
+    replace: true
+
+archives:
+  - id: default
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}-{{ if eq .Os "darwin" }}macos{{ else }}{{ .Os }}{{ end }}-{{ if eq .Arch "all" }}universal{{ else }}{{ .Arch }}{{ end }}
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+brews:
+  - name: paperless
+    repository:
+      owner: julianfbeck
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/julianfbeck/paperless-cli"
+    description: "CLI for Paperless-ngx document management"
+    license: "MIT"
+    install: |
+      bin.install "paperless"
+    test: |
+      system "#{bin}/paperless", "--version"
